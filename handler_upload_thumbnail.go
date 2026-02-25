@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"os"
 	"mime"
+	"crypto/rand"
+	"encoding/base64"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -61,9 +63,17 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	// get file extension
 	fileExtension := mediaTypeToExt(parsedMediaType)
 
-	filename := videoID.String() + fileExtension 				// name of the file will be in filesystem
-	dataPath := filepath.Join(cfg.assetsRoot, filename)			// create filesystem path
-	newFile, err := os.Create(dataPath)							// create new file in the filesystem
+	randomSlice := make([]byte, 32)											// create a random 32-byte slice
+	_, err = rand.Read(randomSlice)											// fill the slice with random bytes
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong", err)
+		return
+	}
+	randomCodedName := base64.RawURLEncoding.EncodeToString(randomSlice)	// encode the random byte to base64 and convert to string
+	
+	filename := randomCodedName + fileExtension
+	dataPath := filepath.Join(cfg.assetsRoot, filename)						// create filesystem path
+	newFile, err := os.Create(dataPath)										// create new file in the filesystem
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "can't create new file", err)
 		return
