@@ -63,7 +63,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	// get file extension
 	fileExtension := mediaTypeToExt(parsedMediaType)
 
-	randomSlice := make([]byte, 32)											// create a random 32-byte slice
+	randomSlice := make([]byte, 32)											// create an empty 32-byte slice
 	_, err = rand.Read(randomSlice)											// fill the slice with random bytes
 	if err != nil {
 		respondWithError(w, 500, "Something went wrong", err)
