@@ -6,7 +6,9 @@ import (
 	"io"
 	"errors"
 	"database/sql"
-	"encoding/base64"
+	"path/filepath"
+	"os"
+	"mime"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -42,29 +44,36 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusBadRequest , "Can't parse multipart form", err)
 		return
 	}
-	fileData, fileHeader, err := r.FormFile("thumbnail")
+	uploadedFileData, fileHeader, err := r.FormFile("thumbnail")
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Can't get file data", err)
 		return
 	}
-	defer fileData.Close()
+	defer uploadedFileData.Close()
 
 	mediaType := fileHeader.Header.Get("Content-Type")
-	imgData, err := io.ReadAll(fileData)
+	// parse mediatype first to strip parameters
+	parsedMediaType , _, err := mime.ParseMediaType(mediaType)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Can't read image data", err)
+		respondWithError(w, http.StatusBadRequest, "Can't parse header",err)
 		return
 	}
+	// get file extension
+	fileExtension := mediaTypeToExt(parsedMediaType)
 
-	// conver image data to a base64 string
-	convertedimgData := base64.StdEncoding.EncodeToString(imgData)
-	// create data URL
-	dataURL := fmt.Sprintf("data:%s;base64,%s", mediaType, convertedimgData)
+	filename := videoID.String() + fileExtension 				// name of the file will be in filesystem
+	dataPath := filepath.Join(cfg.assetsRoot, filename)			// create filesystem path
+	newFile, err := os.Create(dataPath)							// create new file in the filesystem
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "can't create new file", err)
+		return
+	}
+	defer newFile.Close() 
 
 	// get video from video ID
 	videoData, err := cfg.db.GetVideo(videoID)
 	if errors.Is(err, sql.ErrNoRows) {
-		respondWithError(w, http.StatusUnauthorized, "Not found", err)
+		respondWithError(w, http.StatusNotFound, "Not found", err)
 		return
 	} else if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Something went wrong", err )
@@ -76,7 +85,16 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w , http.StatusUnauthorized, "Unauthorized", err)
 		return
 	} 
-	
+
+	// copying the uploaded file to the fiesystem on disk
+	_, err = io.Copy(newFile, uploadedFileData)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Can't save file", err)
+		return
+	}
+
+	thumbPath := "/assets/" + filename
+	dataURL := fmt.Sprintf("http://localhost:%s%s", cfg.port, thumbPath)
 	// updatenew thumbnail url in db
 	videoData.ThumbnailURL = &dataURL
 	err = cfg.db.UpdateVideo(videoData)
