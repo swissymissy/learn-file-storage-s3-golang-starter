@@ -72,18 +72,24 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-
 	// save uploaded file to temporary file on disk
 	tempFile, err := os.CreateTemp("", "tubely-upload.mp4")
 	if err != nil {
 		respondWithError( w, 500 , "Something went wrong", err)
 		return
 	}
-	defer os.Remove(tempFile.Name()) 	// clean up
-	defer tempFile.Close()				// close the file before deleting it
+	defer os.Remove(tempFile.Name()) 					// clean up
+	defer tempFile.Close()								// close the file before deleting it
 
 	// copy the uploaded video file to the temp file on disk
 	_, err = io.Copy(tempFile, multipartFile)
+	if err != nil {
+		respondWithError(w, 500 , "Something went wrong", err)
+		return
+	}
+
+	tempFilePath := tempFile.Name() 					// get the path of tempFile
+	prefix, err := getVideoAspectRatio(tempFilePath)	// get the apect ratio of the video
 	if err != nil {
 		respondWithError(w, 500 , "Something went wrong", err)
 		return
@@ -105,7 +111,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 	hexCodedName := hex.EncodeToString(randBytes)		// encode the bytes to hex string
 	fileExtension := mediaTypeToExt(parsedMediaType)	// get extension of the file
-	filename := hexCodedName + fileExtension			// create file name
+	filename := prefix + "/" + hexCodedName + fileExtension	// create file name
 
 	// create putObjectInput
 	putObjectInput := s3.PutObjectInput{
