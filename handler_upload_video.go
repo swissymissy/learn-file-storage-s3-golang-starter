@@ -95,6 +95,22 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// get processed video path
+	processedPath, err := processVideoForFastStart(tempFilePath)
+	if err != nil {
+		respondWithError(w, 500, "Can't get processed video path", err)
+		return
+	}
+
+	// read the processd video
+	processedVideo, err := os.Open(processedPath)
+	if err != nil {
+		respondWithError(w, 500, "Can't open processed video", err)
+		return
+	}
+	defer os.Remove(processedPath)		// remove temporary artifact
+	defer processedVideo.Close()		// close the opened file
+
 	// reset file's pointer to beginning of file, allowing reading file again from the start
 	_, err = tempFile.Seek(0, io.SeekStart)
 	if err != nil {
@@ -117,7 +133,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	putObjectInput := s3.PutObjectInput{
 		Bucket: &cfg.s3Bucket,
 		Key: &filename,
-		Body: tempFile,
+		Body: processedVideo,
 		ContentType: &parsedMediaType,
 	}
 
