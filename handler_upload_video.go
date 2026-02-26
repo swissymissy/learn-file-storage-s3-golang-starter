@@ -125,8 +125,8 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, 500 , "Something went wrong", err)
 		return
 	}
-	hexCodedName := hex.EncodeToString(randBytes)		// encode the bytes to hex string
-	fileExtension := mediaTypeToExt(parsedMediaType)	// get extension of the file
+	hexCodedName := hex.EncodeToString(randBytes)			// encode the bytes to hex string
+	fileExtension := mediaTypeToExt(parsedMediaType)		// get extension of the file
 	filename := prefix + "/" + hexCodedName + fileExtension	// create file name
 
 	// create putObjectInput
@@ -144,8 +144,8 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// create video new URL
-	videoURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, filename)
+	// create video new limited time URL
+	videoURL := fmt.Sprintf("%s,%s", cfg.s3Bucket, filename)
 	
 	// update video URL in db
 	videoInfo.VideoURL = &videoURL
@@ -154,5 +154,13 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusBadRequest, "Can't update video url", err)
 		return
 	}
-	respondWithJSON(w, http.StatusOK, videoInfo)
+
+	// get video with presigned url
+	presignedURLVideo, err := cfg.dbVideoToSignedVideo(videoInfo)
+	if err != nil {
+		respondWithError(w, 500 , "Can't get presigned url", err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, presignedURLVideo)
 }
